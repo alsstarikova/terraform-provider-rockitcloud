@@ -1,7 +1,6 @@
 package secretsmanager
 
 import (
-	"encoding/base64"
 	"fmt"
 	"log"
 	"strings"
@@ -28,10 +27,10 @@ func ResourceSecretVersion() *schema.Resource {
 		},
 
 		Schema: map[string]*schema.Schema{
-			"arn": {
-				Type:     schema.TypeString,
-				Computed: true,
-			},
+			// "arn": {
+			// 	Type:     schema.TypeString,
+			// 	Computed: true,
+			// },
 			"secret_id": {
 				Type:     schema.TypeString,
 				Required: true,
@@ -84,12 +83,7 @@ func resourceSecretVersionCreate(d *schema.ResourceData, meta interface{}) error
 			return fmt.Errorf("expected base64 in secret_binary")
 		}
 
-		var err error
-		input.SecretBinary, err = base64.StdEncoding.DecodeString(v.(string))
-
-		if err != nil {
-			return fmt.Errorf("error decoding secret binary value: %s", err)
-		}
+		input.SecretBinary = vs
 	}
 
 	if v, ok := d.GetOk("version_stages"); ok {
@@ -131,7 +125,7 @@ func resourceSecretVersionRead(d *schema.ResourceData, meta interface{}) error {
 			return resource.RetryableError(err)
 		}
 
-		if d.IsNewResource() && tfawserr.ErrMessageContains(err, secretsmanager.ErrCodeInvalidRequestException, "You can’t perform this operation on the secret because it was deleted") {
+		if d.IsNewResource() && tfawserr.ErrMessageContains(err, secretsmanager.ErrCodeInvalidRequestException, "is pending deletion") {
 			return resource.RetryableError(err)
 		}
 
@@ -152,7 +146,7 @@ func resourceSecretVersionRead(d *schema.ResourceData, meta interface{}) error {
 		return nil
 	}
 
-	if !d.IsNewResource() && tfawserr.ErrMessageContains(err, secretsmanager.ErrCodeInvalidRequestException, "You can’t perform this operation on the secret because it was deleted") {
+	if !d.IsNewResource() && tfawserr.ErrMessageContains(err, secretsmanager.ErrCodeInvalidRequestException, "is pending deletion") {
 		log.Printf("[WARN] Secrets Manager Secret Version (%s) not found, removing from state", d.Id())
 		d.SetId("")
 		return nil
@@ -170,7 +164,7 @@ func resourceSecretVersionRead(d *schema.ResourceData, meta interface{}) error {
 	d.Set("secret_string", output.SecretString)
 	d.Set("secret_binary", verify.Base64Encode(output.SecretBinary))
 	d.Set("version_id", output.VersionId)
-	d.Set("arn", output.ARN)
+	// d.Set("arn", output.ARN)
 
 	if err := d.Set("version_stages", flex.FlattenStringList(output.VersionStages)); err != nil {
 		return fmt.Errorf("error setting version_stages: %s", err)
@@ -208,9 +202,9 @@ func resourceSecretVersionUpdate(d *schema.ResourceData, meta interface{}) error
 	}
 
 	for _, stage := range stagesToRemove {
-		// InvalidParameterException: You can only move staging label AWSCURRENT to a different secret version. It can’t be completely removed.
-		if stage.(string) == "AWSCURRENT" {
-			log.Printf("[INFO] Skipping removal of AWSCURRENT staging label for secret %q version %q", secretID, versionID)
+		// InvalidRequestException: You cannot remove stage level CLOUDCURRENT without specifying target version id.
+		if stage.(string) == "CLOUDCURRENT" {
+			log.Printf("[INFO] Skipping removal of CLOUDCURRENT staging label for secret %q version %q", secretID, versionID)
 			continue
 		}
 		input := &secretsmanager.UpdateSecretVersionStageInput{
@@ -238,9 +232,9 @@ func resourceSecretVersionDelete(d *schema.ResourceData, meta interface{}) error
 
 	if v, ok := d.GetOk("version_stages"); ok {
 		for _, stage := range v.(*schema.Set).List() {
-			// InvalidParameterException: You can only move staging label AWSCURRENT to a different secret version. It can’t be completely removed.
-			if stage.(string) == "AWSCURRENT" {
-				log.Printf("[WARN] Cannot remove AWSCURRENT staging label, which may leave the secret %q version %q active", secretID, versionID)
+			// InvalidRequestException: You cannot remove stage level CLOUDCURRENT without specifying target version id.
+			if stage.(string) == "CLOUDCURRENT" {
+				log.Printf("[WARN] Cannot remove CLOUDCURRENT staging label, which may leave the secret %q version %q active", secretID, versionID)
 				continue
 			}
 			input := &secretsmanager.UpdateSecretVersionStageInput{
@@ -254,7 +248,7 @@ func resourceSecretVersionDelete(d *schema.ResourceData, meta interface{}) error
 				if tfawserr.ErrCodeEquals(err, secretsmanager.ErrCodeResourceNotFoundException) {
 					return nil
 				}
-				if tfawserr.ErrMessageContains(err, secretsmanager.ErrCodeInvalidRequestException, "You can’t perform this operation on the secret because it was deleted") {
+				if tfawserr.ErrMessageContains(err, secretsmanager.ErrCodeInvalidRequestException, "is pending deletion") {
 					return nil
 				}
 				return fmt.Errorf("error updating Secrets Manager Secret %q Version Stage %q: %s", secretID, stage.(string), err)

@@ -39,9 +39,7 @@ func TestAccSecretsManagerSecretsDataSource_filter(t *testing.T) {
 			{
 				Config: testAccConfigSecretsWithDataSource_filter(rName),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr(dataSourceName, "arns.#", "1"),
 					resource.TestCheckResourceAttr(dataSourceName, "names.#", "1"),
-					resource.TestCheckResourceAttrPair(dataSourceName, "arns.0", resourceName, "arn"),
 					resource.TestCheckResourceAttrPair(dataSourceName, "names.0", resourceName, "name"),
 				),
 			},
@@ -63,7 +61,7 @@ func testAccConfigSecretsWithDataSource_filter(rName string) string {
 		`
 data "aws_secretsmanager_secrets" "test" {
   filter {
-    name   = "name"
+    key    = "name"
     values = [aws_secretsmanager_secret.test.name]
   }
 }

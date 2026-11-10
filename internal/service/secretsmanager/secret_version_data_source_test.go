@@ -89,7 +89,7 @@ func testAccSecretVersionCheckDataSource(datasourceName, resourceName string) re
 		}
 
 		attrNames := []string{
-			"secret_value",
+			"secret_string",
 			"version_stages.#",
 		}
 
@@ -141,7 +141,7 @@ resource "aws_secretsmanager_secret" "test" {
 resource "aws_secretsmanager_secret_version" "test" {
   secret_id      = aws_secretsmanager_secret.test.id
   secret_string  = "test-string"
-  version_stages = ["test-stage", "AWSCURRENT"]
+  version_stages = ["test-stage", "CLOUDCURRENT"]
 }
 
 data "aws_secretsmanager_secret_version" "test" {
